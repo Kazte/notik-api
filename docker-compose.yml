@@ -1,0 +1,8 @@
+version: '3.4'
+
+services:
+  notesapi:
+    image: ${DOCKER_REGISTRY-}notesapi
+    build:
+      context: .
+      dockerfile: NotesApi\Dockerfile
