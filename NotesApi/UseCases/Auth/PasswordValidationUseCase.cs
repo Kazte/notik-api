@@ -1,5 +1,4 @@
-﻿using System.Runtime.InteropServices.JavaScript;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using NotesApi.Shared.Auth;
 
 namespace NotesApi.UseCases.Auth;

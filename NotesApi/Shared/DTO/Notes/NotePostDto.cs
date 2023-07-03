@@ -1,6 +1,4 @@
-﻿using NotesApi.Shared.Models;
-
-namespace NotesApi.Shared.DTO.Notes;
+﻿namespace NotesApi.Shared.DTO.Notes;
 
 public class NotePostDto
 {

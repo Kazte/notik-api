@@ -3,17 +3,12 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.CodeAnalysis.Operations;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using NotesApi.Configurations;
-using NotesApi.Data.Contexts;
 using NotesApi.Data.Interfaces;
 using NotesApi.Shared.DTO.Notes;
 using NotesApi.Shared.Models;
-using NuGet.Protocol;
 
 namespace NotesApi.Controllers;
 

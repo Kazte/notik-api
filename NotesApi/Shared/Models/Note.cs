@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-
-namespace NotesApi.Shared.Models;
+﻿namespace NotesApi.Shared.Models;
 
 public class Note
 {

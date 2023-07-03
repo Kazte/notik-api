@@ -10,7 +10,6 @@ using NotesApi.Shared.Auth;
 using NotesApi.Shared.DTO;
 using NotesApi.Shared.Models;
 using NotesApi.UseCases.Auth;
-using NuGet.Common;
 
 namespace NotesApi.Controllers;
 
