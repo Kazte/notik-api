@@ -48,9 +48,6 @@ public class NotesController : ControllerBase
     {
         var jwt = Request.Headers["Authorization"];
         jwt = jwt.ToString().Split(' ')[1];
-        
-
-        Console.WriteLine(jwt);
 
         // if (jwt is null)
         //     return BadRequest("Invalid Token. null");
@@ -129,7 +126,7 @@ public class NotesController : ControllerBase
         };
 
         var n = await _context.PostNote(newNote);
-        return Ok(n);
+        return Ok(new { data = n });
     }
 
     [HttpPut]
@@ -137,7 +134,7 @@ public class NotesController : ControllerBase
     {
         if (!ModelState.IsValid)
             return BadRequest("Error bad request.");
-        
+
         var user = await _context.GetUserById(request.userId);
 
         if (user is null)
@@ -154,15 +151,15 @@ public class NotesController : ControllerBase
         };
 
         await _context.PutNote(newNote);
-        return NoContent();
+        return Ok(new { result = true });
     }
 
     [HttpDelete]
     public async Task<IActionResult> Delete([FromBody] NoteDelteDto request)
     {
         var note = await _context.GetNoteById(request.NoteId);
-        
+
         await _context.DeleteNote(note);
-        return NoContent();
+        return Ok(new { result = true });
     }
 }

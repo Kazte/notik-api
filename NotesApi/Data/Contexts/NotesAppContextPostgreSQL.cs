@@ -45,10 +45,10 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
 
     public async Task<Note> PostNote(Note note)
     {
-        await Notes.AddAsync(note);
+        var newNote = await Notes.AddAsync(note);
         await SaveChangesAsync();
-
-        return note;
+        
+        return newNote.Entity;
     }
 
     public async Task PutNote(Note note)
