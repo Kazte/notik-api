@@ -1,7 +1,12 @@
-﻿namespace NotesApi.Shared.Models;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
+namespace NotesApi.Shared.Models;
+
+[Table("Users")]
 public class User
 {
+    [Key]
     public int Id { get; set; }
     public string Username { get; set; }
     public string Email { get; set; }

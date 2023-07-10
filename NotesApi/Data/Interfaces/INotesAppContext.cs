@@ -8,7 +8,7 @@ public interface INotesAppContext
     Task<IEnumerable<Note>> GetNotes();
     Task<Note?> GetNoteById(int noteId);
     Task<IEnumerable<Note>> GetNotesByUserId(int userId);
-    Task PostNote(Note note);
+    Task<Note> PostNote(Note note);
     Task PutNote(Note note);
     Task<bool> DeleteNote(Note note);
 
@@ -18,4 +18,8 @@ public interface INotesAppContext
     Task PostUser(User user);
     Task PutUser(User user);
     Task<bool> DeleteUser(User user);
+    
+    
+    // Role
+    Task<Role?> GetRoleById(int id);
 }

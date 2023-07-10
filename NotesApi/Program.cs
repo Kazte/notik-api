@@ -5,6 +5,7 @@ using Microsoft.OpenApi.Models;
 using NotesApi.Configurations;
 using NotesApi.Data.Contexts;
 using NotesApi.Data.Interfaces;
+using NotesApi.Middleware;
 using Swashbuckle.AspNetCore.Filters;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,15 +17,50 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
+    options.SwaggerDoc("v1", new OpenApiInfo{Title = "Notik", Version = "v1"});
+
     options.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
     {
         In = ParameterLocation.Header,
         Name = "Authorization",
         Type = SecuritySchemeType.ApiKey
     });
+    
+    options.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
+    {
+        Description = "Api key to access the API",
+        Type = SecuritySchemeType.ApiKey,
+        Name = "x-api-key",
+        In = ParameterLocation.Header,
+        Scheme = "ApiKeyScheme"
+    });
+    
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference{Type = ReferenceType.SecurityScheme, Id = "oauth2"}
+            },
+            new[] {"Notik"}
+        },
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference{Type = ReferenceType.SecurityScheme, Id = "ApiKey"}
+            },
+            new[] {"Notik"}
+        },
+    });
 
-    options.OperationFilter<SecurityRequirementsOperationFilter>();
+    // options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
+
+builder.Services.AddSwaggerGen(options =>
+{
+    
+});
+
 builder.Services.AddAuthentication().AddJwtBearer(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
@@ -71,6 +107,8 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 
 app.UseHttpsRedirection();
+
+app.UseMiddleware<ApiKeyAuthMiddleware>();
 
 app.UseAuthentication();
 

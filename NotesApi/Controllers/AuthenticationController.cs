@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NotesApi.Configurations;
@@ -46,6 +47,31 @@ public class AuthenticationController : ControllerBase
             });
 
 
+        var users = await _context.GetUsers();
+        var emailUsed = users.Any(x => x.Email == request.Email);
+        var usernameUsed = users.Any(x => x.Username == request.Username);
+
+        var errors = new List<string>();
+
+        if (emailUsed)
+        {
+            errors.Add("Email already taken");
+        }
+
+        if (usernameUsed)
+        {
+            errors.Add("Username already taken");
+        }
+
+        if (errors.Count > 0)
+        {
+            return BadRequest(new AuthResult
+            {
+                Result = false,
+                Errors = errors
+            });
+        }
+
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
 
         var user = new User();
@@ -53,9 +79,13 @@ public class AuthenticationController : ControllerBase
         user.PasswordHash = passwordHash;
         user.Email = request.Email;
 
+        var role = await _context.GetRoleById(1);
+
+        user.Roles = new List<Role>();
+
         await _context.PostUser(user);
 
-        return NoContent();
+        return Ok(new { result = true });
     }
 
     [HttpPost("login")]
@@ -65,6 +95,15 @@ public class AuthenticationController : ControllerBase
             return BadRequest("Invalid Model State.");
 
         var user = (await _context.GetUsers()).FirstOrDefault(u => u.Username == request.Username);
+
+        if (user is null)
+            return NotFound(
+                new AuthResult
+                {
+                    Errors = new List<string> { "User not found." }, // TODO: "Invalid Credentials". Only for Dev
+                    Result = false
+                }
+            );
 
         if (user.Username != request.Username)
             return BadRequest(new AuthResult
@@ -90,8 +129,68 @@ public class AuthenticationController : ControllerBase
         return Ok(new AuthResult
         {
             Result = true,
-            Token = token
+            Token = token,
+            User =
+                new
+                {
+                    userId = user.Id,
+                    username = user.Username,
+                    email = user.Email
+                }
         });
+    }
+
+    [HttpPost("verify")]
+    public async Task<IActionResult> Verify(VerifyDto request)
+    {
+        try
+        {
+            var tokenSecurityHandler = new JwtSecurityTokenHandler();
+
+            var tokenToVerify = tokenSecurityHandler.ValidateToken(request.Token, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                ValidateAudience = false,
+                ValidateIssuer = false,
+                IssuerSigningKey =
+                    new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(_jwtConfig.Secret))
+            }, out var validatedToken);
+
+            if (validatedToken is JwtSecurityToken jwtSecurityToken)
+            {
+                var result = jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256Signature,
+                    StringComparison.InvariantCultureIgnoreCase);
+
+                if (!result || tokenToVerify is null)
+                {
+                    return BadRequest(new { response = false, message = "Invalid Token" });
+                }
+
+                var token = tokenSecurityHandler.ReadJwtToken(request.Token);
+                var claims = token.Claims.ToList().FirstOrDefault(c => c.Type == "id")?.Value;
+
+                
+                // return Ok(new
+                // {
+                //     response = false, message = "Invalid Token"
+                // });
+                
+                return Ok(new
+                {
+                    response = true, user = new
+                    {
+                        id = claims
+                    }
+                });
+            }
+        }
+        catch (Exception e)
+        {
+            return BadRequest(new { response = false, message = "Invalid Token" });
+        }
+
+        return BadRequest();
     }
 
     private string CreateJwtToken(User user)
@@ -114,6 +213,7 @@ public class AuthenticationController : ControllerBase
             expires: DateTime.UtcNow.AddDays(1),
             signingCredentials: credentials
         );
+
 
         var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 

@@ -27,7 +27,6 @@ public class NotesController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Get()
     {
         return Ok(await _context.GetNotes());
@@ -47,10 +46,14 @@ public class NotesController : ControllerBase
     [HttpGet("GetNotesByUserID/{userId:int}")]
     public async Task<IActionResult> GetByUserId(int userId)
     {
-        var jwt = Request.Cookies["jwt"];
+        var jwt = Request.Headers["Authorization"];
+        jwt = jwt.ToString().Split(' ')[1];
+        
 
-        if (jwt is null)
-            return BadRequest("Invalid Token.");
+        Console.WriteLine(jwt);
+
+        // if (jwt is null)
+        //     return BadRequest("Invalid Token. null");
 
         var claims = GetClaimsFromJwt(jwt);
 
@@ -68,7 +71,7 @@ public class NotesController : ControllerBase
 
 
         if (idFromJwt is null)
-            return BadRequest("Invalid Token.");
+            return BadRequest("Invalid Token. id");
 
         if (userId != int.Parse(idFromJwt))
             return NotFound();
@@ -125,24 +128,41 @@ public class NotesController : ControllerBase
             NoteModified = request.NoteModified
         };
 
-        await _context.PostNote(newNote);
-        return NoContent();
+        var n = await _context.PostNote(newNote);
+        return Ok(n);
     }
 
     [HttpPut]
-    public async Task<IActionResult> Put([FromBody] Note request)
+    public async Task<IActionResult> Put([FromBody] NotePutDto request)
     {
         if (!ModelState.IsValid)
             return BadRequest("Error bad request.");
+        
+        var user = await _context.GetUserById(request.userId);
 
-        await _context.PutNote(request);
+        if (user is null)
+            return NotFound();
+
+        var newNote = new Note
+        {
+            Id = request.Id,
+            userId = user.Id,
+            NoteBody = request.NoteBody,
+            NoteTitle = request.NoteTitle,
+            NoteCreated = request.NoteCreated,
+            NoteModified = request.NoteModified
+        };
+
+        await _context.PutNote(newNote);
         return NoContent();
     }
 
     [HttpDelete]
-    public async Task<IActionResult> Delete(Note request)
+    public async Task<IActionResult> Delete([FromBody] NoteDelteDto request)
     {
-        await _context.DeleteNote(request);
+        var note = await _context.GetNoteById(request.NoteId);
+        
+        await _context.DeleteNote(note);
         return NoContent();
     }
 }

@@ -8,6 +8,7 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
 {
     public DbSet<Note> Notes { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<Role> Roles { get; set; }
 
     public NotesAppContextPostgreSQL(DbContextOptions options) : base(options)
     {
@@ -20,6 +21,9 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
+        modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
+
         modelBuilder.Entity<Note>().Property(o => o.NoteCreated).HasDefaultValueSql("now()");
         modelBuilder.Entity<Note>().Property(o => o.NoteModified).HasDefaultValueSql("now()");
     }
@@ -39,10 +43,12 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
         return await Notes.Where(n => n.userId == userId).ToListAsync();
     }
 
-    public async Task PostNote(Note note)
+    public async Task<Note> PostNote(Note note)
     {
         await Notes.AddAsync(note);
         await SaveChangesAsync();
+
+        return note;
     }
 
     public async Task PutNote(Note note)
@@ -65,12 +71,14 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
 
     public async Task<IEnumerable<User>> GetUsers()
     {
-        return await Users.Include(u => u.Roles).ToListAsync();
+        return await Users.Include(x => x.Roles).ToListAsync();
     }
 
     public async Task<User?> GetUserById(int userId)
     {
-        return await Users.Include(u => u.Roles).FirstOrDefaultAsync(n => n.Id == userId);
+        var user = await Users.Include(x => x.Roles).FirstOrDefaultAsync(x => x.Id == userId);
+
+        return user;
     }
 
     public async Task PostUser(User user)
@@ -87,5 +95,11 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
     public Task<bool> DeleteUser(User user)
     {
         throw new NotImplementedException();
+    }
+
+    public async Task<Role?> GetRoleById(int id)
+    {
+        return await Roles.FirstOrDefaultAsync(r => r.Id == id);
+        // throw new NotImplementedException();
     }
 }
