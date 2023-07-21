@@ -11,6 +11,7 @@ using NotesApi.Shared.Auth;
 using NotesApi.Shared.DTO;
 using NotesApi.Shared.Models;
 using NotesApi.UseCases.Auth;
+using NotesApi.Utilities;
 
 namespace NotesApi.Controllers;
 
@@ -18,16 +19,18 @@ namespace NotesApi.Controllers;
 [Route("api/[controller]")]
 public class AuthenticationController : ControllerBase
 {
-    public readonly INotesAppContext _context;
+    private readonly INotesAppContext _context;
 
     private readonly JwtConfig _jwtConfig;
+    private readonly JwtUtilities _jwtUtilities;
 
     private readonly PasswordValidationUseCase _passwordValidationUseCase;
 
-    public AuthenticationController(INotesAppContext context, IOptions<JwtConfig> jwtConfig)
+    public AuthenticationController(INotesAppContext context, IOptions<JwtConfig> jwtConfig, JwtUtilities jwtUtilities)
     {
         _context = context;
         _jwtConfig = jwtConfig.Value;
+        _jwtUtilities = jwtUtilities;
         _passwordValidationUseCase = new PasswordValidationUseCase();
     }
 
@@ -40,12 +43,7 @@ public class AuthenticationController : ControllerBase
         var passwordValidation = _passwordValidationUseCase.PasswordValidation(request.Password);
 
         if (passwordValidation.Count > 0)
-            return BadRequest(new AuthResult
-            {
-                Errors = passwordValidation,
-                Result = false
-            });
-
+            return BadRequest(new AuthResult { Errors = passwordValidation, Result = false });
 
         var users = await _context.GetUsers();
         var emailUsed = users.Any(x => x.Email == request.Email);
@@ -55,21 +53,13 @@ public class AuthenticationController : ControllerBase
 
         if (emailUsed)
         {
-            errors.Add("Email already taken");
+            return BadRequest(new AuthResult { Result = false, Errors = new List<string> { "Email already taken" } });
         }
 
         if (usernameUsed)
         {
-            errors.Add("Username already taken");
-        }
-
-        if (errors.Count > 0)
-        {
             return BadRequest(new AuthResult
-            {
-                Result = false,
-                Errors = errors
-            });
+                { Result = false, Errors = new List<string> { "Username already taken" } });
         }
 
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
@@ -79,9 +69,7 @@ public class AuthenticationController : ControllerBase
         user.PasswordHash = passwordHash;
         user.Email = request.Email;
 
-        var role = await _context.GetRoleById(1);
-
-        user.Roles = new List<Role>();
+        user.Role = await _context.GetRoleByName("User");
 
         await _context.PostUser(user);
 
@@ -106,38 +94,41 @@ public class AuthenticationController : ControllerBase
             );
 
         if (user.Username != request.Username)
-            return BadRequest(new AuthResult
-            {
-                Errors = new List<string> { "Invalid Credentials." },
-                Result = false
-            });
+            return BadRequest(
+                new AuthResult
+                {
+                    Errors = new List<string> { "Invalid Credentials." },
+                    Result = false
+                }
+            );
 
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            return BadRequest(new AuthResult
+            return BadRequest(
+                new AuthResult
+                {
+                    Errors = new List<string>
+                        { "Invalid Credentials.pass" }, // TODO: "Invalid Credentials". Only for Dev
+                    Result = false
+                }
+            );
+
+        var token = _jwtUtilities.CreateJwtToken(user);
+
+        // Response.Cookies.Append("jwt", token, new CookieOptions() { HttpOnly = true });
+
+        return Ok(
+            new AuthResult
             {
-                Errors = new List<string> { "Invalid Credentials." }, // TODO: "Invalid Credentials". Only for Dev
-                Result = false
-            });
-
-        var token = CreateJwtToken(user);
-
-        Response.Cookies.Append("jwt", token, new CookieOptions()
-        {
-            HttpOnly = true
-        });
-
-        return Ok(new AuthResult
-        {
-            Result = true,
-            Token = token,
-            User =
-                new
+                Result = true,
+                Token = token,
+                User = new
                 {
                     userId = user.Id,
                     username = user.Username,
                     email = user.Email
                 }
-        });
+            }
+        );
     }
 
     [HttpPost("verify")]
@@ -147,20 +138,26 @@ public class AuthenticationController : ControllerBase
         {
             var tokenSecurityHandler = new JwtSecurityTokenHandler();
 
-            var tokenToVerify = tokenSecurityHandler.ValidateToken(request.Token, new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                ValidateAudience = false,
-                ValidateIssuer = false,
-                IssuerSigningKey =
-                    new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(_jwtConfig.Secret))
-            }, out var validatedToken);
+            var tokenToVerify = tokenSecurityHandler.ValidateToken(
+                request.Token,
+                new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    ValidateAudience = false,
+                    ValidateIssuer = false,
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(_jwtConfig.Secret)
+                    )
+                },
+                out var validatedToken
+            );
 
             if (validatedToken is JwtSecurityToken jwtSecurityToken)
             {
-                var result = jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256Signature,
-                    StringComparison.InvariantCultureIgnoreCase);
+                var result = jwtSecurityToken.Header.Alg.Equals(
+                    SecurityAlgorithms.HmacSha256Signature,
+                    StringComparison.InvariantCultureIgnoreCase
+                );
 
                 if (!result || tokenToVerify is null)
                 {
@@ -170,53 +167,19 @@ public class AuthenticationController : ControllerBase
                 var token = tokenSecurityHandler.ReadJwtToken(request.Token);
                 var claims = token.Claims.ToList().FirstOrDefault(c => c.Type == "id")?.Value;
 
-                
                 // return Ok(new
                 // {
                 //     response = false, message = "Invalid Token"
                 // });
-                
-                return Ok(new
-                {
-                    response = true, user = new
-                    {
-                        id = claims
-                    }
-                });
+
+                return Ok(new { response = true, user = new { id = claims } });
             }
         }
-        catch (Exception e)
+        catch (Exception)
         {
-            return BadRequest(new { response = false, message = "Invalid Token" });
+            return BadRequest(new { response = false, message = "Invalid Token.err" });
         }
 
         return BadRequest();
-    }
-
-    private string CreateJwtToken(User user)
-    {
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.Name, user.Username),
-            new("id", user.Id.ToString())
-        };
-
-        claims.AddRange(user.Roles.Select(role => new Claim(ClaimTypes.Role, role.Name)));
-
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_jwtConfig.Secret));
-
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
-
-        var token = new JwtSecurityToken(
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(1),
-            signingCredentials: credentials
-        );
-
-
-        var jwt = new JwtSecurityTokenHandler().WriteToken(token);
-
-        return jwt;
     }
 }

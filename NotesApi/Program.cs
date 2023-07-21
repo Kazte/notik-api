@@ -5,7 +5,7 @@ using Microsoft.OpenApi.Models;
 using NotesApi.Configurations;
 using NotesApi.Data.Contexts;
 using NotesApi.Data.Interfaces;
-using NotesApi.Middleware;
+using NotesApi.Utilities;
 using Swashbuckle.AspNetCore.Filters;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,65 +13,40 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers();
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo{Title = "Notik", Version = "v1"});
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Notik", Version = "v1" });
 
-    options.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
-    {
-        In = ParameterLocation.Header,
-        Name = "Authorization",
-        Type = SecuritySchemeType.ApiKey
-    });
-    
-    options.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
-    {
-        Description = "Api key to access the API",
-        Type = SecuritySchemeType.ApiKey,
-        Name = "x-api-key",
-        In = ParameterLocation.Header,
-        Scheme = "ApiKeyScheme"
-    });
-    
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
+    options.AddSecurityDefinition(
+        "oauth2",
+        new OpenApiSecurityScheme
         {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference{Type = ReferenceType.SecurityScheme, Id = "oauth2"}
-            },
-            new[] {"Notik"}
-        },
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference{Type = ReferenceType.SecurityScheme, Id = "ApiKey"}
-            },
-            new[] {"Notik"}
-        },
-    });
+            In = ParameterLocation.Header,
+            Name = "Authorization",
+            Type = SecuritySchemeType.ApiKey
+        }
+    );
 
-    // options.OperationFilter<SecurityRequirementsOperationFilter>();
+    options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
 
-builder.Services.AddSwaggerGen(options =>
-{
-    
-});
-
-builder.Services.AddAuthentication().AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+builder.Services
+    .AddAuthentication()
+    .AddJwtBearer(options =>
     {
-        ValidateIssuerSigningKey = true,
-        ValidateAudience = false,
-        ValidateIssuer = false,
-        IssuerSigningKey =
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration.GetSection("JwtConfig:Secret").Value!))
-    };
-});
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            ValidateAudience = false,
+            ValidateIssuer = false,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration.GetSection("JwtConfig:Secret").Value!)
+            )
+        };
+    });
 
 builder.Services.AddScoped<INotesAppContext, NotesAppContextPostgreSQL>();
 
@@ -81,29 +56,36 @@ builder.Services.AddDbContext<NotesAppContextPostgreSQL>(optionsBuilder =>
 });
 
 // JWT Config
-builder.Services.Configure<JwtConfig>(
-    builder.Configuration.GetSection("JwtConfig"));
+builder.Services.Configure<JwtConfig>(builder.Configuration.GetSection("JwtConfig"));
+builder.Services.AddScoped<JwtUtilities>();
 
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddCors(options =>
     {
-        options.AddDefaultPolicy(
-            builder =>
-            {
-                builder.WithOrigins("http://localhost:5173")
-                    .AllowAnyHeader()
-                    .AllowAnyMethod();
-            });
+        options.AddDefaultPolicy(builder =>
+        {
+            builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        });
     });
 }
 
-builder.Services.AddControllersWithViews().AddNewtonsoftJson(options =>
-{
-    options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
-});
+// Json loop handling
+builder.Services
+    .AddControllersWithViews()
+    .AddNewtonsoftJson(options =>
+    {
+        options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+    });
 
 var app = builder.Build();
+
+// Auto migration
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<NotesAppContextPostgreSQL>();
+    context.Database.Migrate();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -115,8 +97,6 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 
 app.UseHttpsRedirection();
-
-app.UseMiddleware<ApiKeyAuthMiddleware>();
 
 app.UseAuthentication();
 

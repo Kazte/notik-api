@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NotesApi.Migrations
 {
     [DbContext(typeof(NotesAppContextPostgreSQL))]
-    [Migration("20230703191555_UsersRoles")]
-    partial class UsersRoles
+    [Migration("20230720230801_AddGuidToNotes")]
+    partial class AddGuidToNotes
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -33,6 +33,10 @@ namespace NotesApi.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Guid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("NoteBody")
                         .IsRequired()
                         .HasColumnType("text");
@@ -51,12 +55,15 @@ namespace NotesApi.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("userId")
+                    b.Property<bool>("Public")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("UserId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("userId");
+                    b.HasIndex("UserId");
 
                     b.ToTable("Notes");
                 });
@@ -75,7 +82,7 @@ namespace NotesApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Role");
+                    b.ToTable("Roles");
                 });
 
             modelBuilder.Entity("NotesApi.Shared.Models.User", b =>
@@ -103,7 +110,13 @@ namespace NotesApi.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Email")
+                        .IsUnique();
+
                     b.HasIndex("RoleId");
+
+                    b.HasIndex("Username")
+                        .IsUnique();
 
                     b.ToTable("Users");
                 });
@@ -112,7 +125,7 @@ namespace NotesApi.Migrations
                 {
                     b.HasOne("NotesApi.Shared.Models.User", "User")
                         .WithMany("Notes")
-                        .HasForeignKey("userId")
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

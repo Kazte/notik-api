@@ -30,6 +30,7 @@
 
     <ItemGroup>
       <Folder Include="Interfaces\" />
+      <Folder Include="Middleware\" />
     </ItemGroup>
 
 </Project>

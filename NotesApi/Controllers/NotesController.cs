@@ -9,24 +9,27 @@ using NotesApi.Configurations;
 using NotesApi.Data.Interfaces;
 using NotesApi.Shared.DTO.Notes;
 using NotesApi.Shared.Models;
+using NotesApi.Utilities;
 
 namespace NotesApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class NotesController : ControllerBase
 {
     private readonly INotesAppContext _context;
 
-    private readonly JwtConfig _jwtConfig;
+    private readonly JwtUtilities _jwtUtilities;
 
-    public NotesController(INotesAppContext context, IOptions<JwtConfig> jwtConfig)
+    public NotesController(INotesAppContext context, JwtUtilities jwtUtilities)
     {
         _context = context;
-        _jwtConfig = jwtConfig.Value;
+        _jwtUtilities = jwtUtilities;
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Get()
     {
         return Ok(await _context.GetNotes());
@@ -35,7 +38,21 @@ public class NotesController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
+        var user = HttpContext.User;
+
+        int? userId = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier).Value);
         var note = await _context.GetNoteById(id);
+
+        if (userId != note.UserId)
+        {
+            if (note.Public)
+            {
+                return Ok(note);
+            }
+
+            return BadRequest();
+        }
+
 
         if (note is null)
             return NotFound();
@@ -43,123 +60,156 @@ public class NotesController : ControllerBase
         return Ok(note);
     }
 
-    [HttpGet("GetNotesByUserID/{userId:int}")]
-    public async Task<IActionResult> GetByUserId(int userId)
+    [HttpGet("GetByGuid")]
+    public async Task<IActionResult> GetByGuid(string guid)
     {
-        var jwt = Request.Headers["Authorization"];
-        jwt = jwt.ToString().Split(' ')[1];
+        var user = HttpContext.User;
 
-        // if (jwt is null)
-        //     return BadRequest("Invalid Token. null");
+        int? userId = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier).Value);
+        var note = await _context.GetNoteByGuid(guid);
 
-        var claims = GetClaimsFromJwt(jwt);
-
-        var idFromJwt = claims.FirstOrDefault(c => c.Type == "id")?.Value;
-
-        var isAdmin =
-            claims.Where(c => c.Type == ClaimTypes.Role).FirstOrDefault(c => c.Value == "Admin")?.Value is not null;
-
-        if (isAdmin)
+        if (userId != note.UserId)
         {
-            var n = await _context.GetNotesByUserId(userId);
+            if (note.Public)
+            {
+                return Ok(note);
+            }
 
-            return Ok(n);
+            return BadRequest();
         }
 
 
-        if (idFromJwt is null)
-            return BadRequest("Invalid Token. id");
-
-        if (userId != int.Parse(idFromJwt))
+        if (note is null)
             return NotFound();
-
-        var note = await _context.GetNotesByUserId(userId);
 
         return Ok(note);
     }
 
-    private List<Claim> GetClaimsFromJwt(string? jwt)
+    [HttpGet("GetNotesByUserID")]
+    public async Task<IActionResult> GetByUserId()
     {
-        var tokenSecurityHandler = new JwtSecurityTokenHandler();
+        var user = HttpContext.User;
 
-        var tokenToVerify = tokenSecurityHandler.ValidateToken(jwt, new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            ValidateAudience = false,
-            ValidateIssuer = false,
-            IssuerSigningKey =
-                new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(_jwtConfig.Secret))
-        }, out var validatedToken);
+        int? id = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier).Value);
 
-        if (validatedToken is JwtSecurityToken jwtSecurityToken)
-        {
-            var result = jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256Signature,
-                StringComparison.InvariantCultureIgnoreCase);
+        if (id == null)
+            return NotFound();
 
-            if (!result || tokenToVerify is null)
-            {
-                throw new Exception("Invalid Token");
-            }
-        }
+        var notes = await _context.GetNotesByUserId(id.Value);
 
-        var token = tokenSecurityHandler.ReadJwtToken(jwt);
-        var claims = token.Claims.ToList();
-        return claims;
+        return Ok(notes);
     }
+
 
     [HttpPost]
     public async Task<IActionResult> Post(NotePostDto request)
     {
-        var user = await _context.GetUserById(request.userId);
+        var userId = int.Parse(HttpContext.User.FindFirst(ClaimTypes.NameIdentifier).Value);
+
+        var user = await _context.GetUserById(userId);
 
         if (user is null)
             return NotFound();
 
         var newNote = new Note
         {
-            userId = user.Id,
+            UserId = user.Id,
             NoteBody = request.NoteBody,
             NoteTitle = request.NoteTitle,
-            NoteCreated = request.NoteCreated,
-            NoteModified = request.NoteModified
+            Guid = GuidUtilities.GenerateGuid(),
+            NoteModified = request.NoteModified,
+            Public = request.Public
         };
 
         var n = await _context.PostNote(newNote);
-        return Ok(new { data = n });
+        return CreatedAtAction("Post", n.Id, new
+        {
+            Id = n.Id,
+            UserId = user.Id,
+            request.NoteBody,
+            request.NoteTitle,
+            request.NoteCreated,
+            request.NoteModified,
+            request.Public,
+            newNote.Guid,
+        });
     }
 
     [HttpPut]
-    public async Task<IActionResult> Put([FromBody] NotePutDto request)
+    public async Task<IActionResult> Put([FromBody] NotePostDto request)
     {
         if (!ModelState.IsValid)
             return BadRequest("Error bad request.");
 
-        var user = await _context.GetUserById(request.userId);
+        var userId = int.Parse(HttpContext.User.FindFirst(ClaimTypes.NameIdentifier).Value);
+        var n = await _context.GetNoteById(request.Id);
 
-        if (user is null)
-            return NotFound();
-
-        var newNote = new Note
+        if (n != null)
         {
-            Id = request.Id,
-            userId = user.Id,
-            NoteBody = request.NoteBody,
-            NoteTitle = request.NoteTitle,
-            NoteCreated = request.NoteCreated,
-            NoteModified = request.NoteModified
-        };
+            if (userId != n.UserId)
+                return BadRequest();
 
-        await _context.PutNote(newNote);
+            n.NoteTitle = request.NoteTitle;
+            n.NoteBody = request.NoteBody;
+            n.Public = request.Public;
+            n.NoteModified = request.NoteModified;
+
+            await _context.SaveChanges();
+        }
+        else
+        {
+            return NotFound();
+        }
+
         return Ok(new { result = true });
     }
 
-    [HttpDelete]
-    public async Task<IActionResult> Delete([FromBody] NoteDelteDto request)
+    [HttpDelete("{noteId:int}")]
+    public async Task<IActionResult> Delete(int noteId)
     {
-        var note = await _context.GetNoteById(request.NoteId);
+        var user = HttpContext.User;
+        var userId = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier).Value);
+
+        var note = await _context.GetNoteById(noteId);
+
+        if (note.UserId != userId)
+        {
+            return BadRequest();
+        }
+
 
         await _context.DeleteNote(note);
         return Ok(new { result = true });
+    }
+
+    [HttpGet("share")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Share(string guid)
+    {
+        var user = HttpContext.User;
+        var identifier = user.FindFirst(ClaimTypes.NameIdentifier);
+
+        var note = await _context.GetNoteByGuid(guid);
+
+        if (note is null)
+            return NotFound();
+        
+        if (identifier is null)
+        {
+            if (note.Public)
+                return Ok(note);
+
+            return NotFound();
+        }
+
+        int? userId = int.Parse(identifier.Value);
+
+        if (userId == note.UserId)
+            return Ok(new { data = note, result = true });
+
+        if (note.Public)
+            return Ok(new { data = note, result = true });
+
+        return BadRequest();
     }
 }

@@ -28,6 +28,11 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
         modelBuilder.Entity<Note>().Property(o => o.NoteModified).HasDefaultValueSql("now()");
     }
 
+    public async Task SaveChanges()
+    {
+        await SaveChangesAsync();
+    }
+
     public async Task<IEnumerable<Note>> GetNotes()
     {
         return await Notes.ToListAsync();
@@ -35,12 +40,17 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
 
     public async Task<Note?> GetNoteById(int noteId)
     {
-        return await Notes.FirstOrDefaultAsync(n => n.Id == noteId);
+        return await Notes.Include(n => n.User).FirstOrDefaultAsync(n => n.Id == noteId);
+    }
+
+    public async Task<Note?> GetNoteByGuid(string noteGuid)
+    {
+        return await Notes.FirstOrDefaultAsync(n => n.Guid == noteGuid);
     }
 
     public async Task<IEnumerable<Note>> GetNotesByUserId(int userId)
     {
-        return await Notes.Where(n => n.userId == userId).ToListAsync();
+        return await Notes.Where(n => n.UserId == userId).ToListAsync();
     }
 
     public async Task<Note> PostNote(Note note)
@@ -71,12 +81,12 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
 
     public async Task<IEnumerable<User>> GetUsers()
     {
-        return await Users.Include(x => x.Roles).ToListAsync();
+        return await Users.Include(x => x.Role).ToListAsync();
     }
 
     public async Task<User?> GetUserById(int userId)
     {
-        var user = await Users.Include(x => x.Roles).FirstOrDefaultAsync(x => x.Id == userId);
+        var user = await Users.Include(x => x.Role).FirstOrDefaultAsync(x => x.Id == userId);
 
         return user;
     }
@@ -101,5 +111,10 @@ public class NotesAppContextPostgreSQL : DbContext, INotesAppContext
     {
         return await Roles.FirstOrDefaultAsync(r => r.Id == id);
         // throw new NotImplementedException();
+    }
+
+    public async Task<Role?> GetRoleByName(string roleName)
+    {
+        return await Roles.FirstOrDefaultAsync(r => r.Name == roleName);
     }
 }

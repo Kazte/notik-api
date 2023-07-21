@@ -7,12 +7,16 @@ namespace NotesApi.Shared.Models;
 public class User
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
+    
     public string Username { get; set; }
     public string Email { get; set; }
     public string PasswordHash { get; set; }
 
-    public ICollection<Role> Roles { get; set; }
-
-    public ICollection<Note> Notes { get; set; }
+    public int RoleId { get;set; }
+    [ForeignKey("RoleId")]
+    public virtual Role Role { get; set; }
+           
+    public virtual ICollection<Note> Notes { get; set; }
 }

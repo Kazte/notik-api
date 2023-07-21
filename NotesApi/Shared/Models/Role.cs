@@ -8,9 +8,10 @@ namespace NotesApi.Shared.Models;
 public class Role
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     public string Name { get; set; }
 
     [JsonIgnore]
-    public ICollection<User> Users { get; set; }
+    public virtual ICollection<User> Users { get; set; }
 }
