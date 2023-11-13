@@ -194,6 +194,12 @@ public class NotesController : ControllerBase
         if (note is null)
             return NotFound();
         
+        if (note.Public)
+        {
+            Console.WriteLine("Test");
+            return Ok(new { data = note, result = true });
+        }
+        
         if (identifier is null)
         {
             if (note.Public)
@@ -207,8 +213,7 @@ public class NotesController : ControllerBase
         if (userId == note.UserId)
             return Ok(new { data = note, result = true });
 
-        if (note.Public)
-            return Ok(new { data = note, result = true });
+        
 
         return BadRequest();
     }
