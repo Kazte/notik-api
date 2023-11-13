@@ -6,7 +6,7 @@ services:
     ports:
       - '8080:80'
     environment:
-      - ConnectionStrings__PostgreSQL_Dev=Server=ep-holy-wind-43978503-pooler.us-east-1.postgres.vercel-storage.com;Port=5432;Database=verceldb;User Id=default;Password=GHdrKonh26FQ;
-      - JwtConfig__Secret=83398f796fdf59128993468187aaa54c
-      - Auth__ApiKey=4dcb88362a085bed9f441c19271ce909
+      - ConnectionStrings__PostgreSQL_Dev=Server=
+      - JwtConfig__Secret=
+      - Auth__ApiKey=
       - AllowedHosts=*
