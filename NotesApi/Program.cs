@@ -52,6 +52,7 @@ builder.Services.AddScoped<INotesAppContext, NotesAppContextPostgreSQL>();
 
 builder.Services.AddDbContext<NotesAppContextPostgreSQL>(optionsBuilder =>
 {
+    // Console.WriteLine(builder.Configuration["ConnectionStrings:PostgreSQL_Dev"]);
     optionsBuilder.UseNpgsql(builder.Configuration["ConnectionStrings:PostgreSQL_Dev"]);
 });
 
@@ -63,10 +64,7 @@ if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddCors(options =>
     {
-        options.AddDefaultPolicy(builder =>
-        {
-            builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
-        });
+        options.AddDefaultPolicy(builder => { builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod(); });
     });
 }
 
@@ -88,13 +86,13 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseCors();
+app.UseCors(builder => builder.AllowAnyMethod().AllowAnyOrigin().AllowAnyHeader());
 
 app.UseHttpsRedirection();
 
