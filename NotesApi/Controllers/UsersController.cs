@@ -5,6 +5,7 @@ using NotesApi.Data.Interfaces;
 namespace NotesApi.Controllers;
 
 [ApiController]
+[Authorize(Roles = "Admin")]
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
 {
